@@ -1,9 +1,9 @@
 # main.py
 import json
 import gspread
+import os
 from google.oauth2.service_account import Credentials
 from typing import Dict
-import os
 
 # ---------------- CONFIG ----------------
 SPREADSHEET_ID = "1WeAySjhKMjq97tefVxLIZd3NJRTmacFVhfaSBTyXA7Q"
@@ -36,17 +36,15 @@ def get_sheet():
     Local → uses service_account.json
     Render → uses GOOGLE_CREDENTIALS_JSON
     """
-
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 
-    # ✅ Render / Production
+    # Production (Render)
     if creds_json:
         creds = Credentials.from_service_account_info(
             json.loads(creds_json),
             scopes=SCOPES
         )
-
-    # ✅ Local development
+    # Local development
     else:
         creds = Credentials.from_service_account_file(
             "service_account.json",
@@ -60,12 +58,12 @@ def get_sheet():
 def save_order(data: Dict):
     sheet = get_sheet()
     sheet.append_row([
-        data["category"],
-        data["item"],
-        data["quantity"],
-        data["name"],
-        data["mobile"],
-        data["address"]
+        data.get("category", ""),
+        data.get("item", ""),
+        data.get("quantity", ""),
+        data.get("name", ""),
+        data.get("mobile", ""),
+        data.get("address", "")
     ])
 
 
@@ -73,14 +71,9 @@ def save_order(data: Dict):
 def bot_reply(user_id: str, message: str) -> str:
     message = message.lower().strip()
 
-    if user_id not in sessions:
-        sessions[user_id] = {"step": "start"}
-
-    session = sessions[user_id]
-
-    # STEP 1: Greeting
-    if session["step"] == "start":
-        session["step"] = "category"
+    # 🔹 GLOBAL GREETING / RESET (FIX)
+    if message in ["hi", "hii", "hello", "hey", "start"]:
+        sessions[user_id] = {"step": "category"}
         return (
             "👋 Hello! Welcome to Home Made Foods 😊\n\n"
             "Please choose one option:\n"
@@ -89,7 +82,12 @@ def bot_reply(user_id: str, message: str) -> str:
             "✍️ Reply with 1 or 2"
         )
 
-    # STEP 2: Category
+    if user_id not in sessions:
+        sessions[user_id] = {"step": "category"}
+
+    session = sessions[user_id]
+
+    # STEP 1: Category
     if session["step"] == "category":
         if message in ["1", "oils"]:
             session["category"] = "Oils"
@@ -112,7 +110,7 @@ def bot_reply(user_id: str, message: str) -> str:
             "✍️ Please reply with item number"
         )
 
-    # STEP 3: Item selection
+    # STEP 2: Item selection
     if session["step"] == "item":
         menu = session["menu"]
 
@@ -122,21 +120,24 @@ def bot_reply(user_id: str, message: str) -> str:
         session["item"] = menu[message]
         session["step"] = "quantity"
 
-        return f"📦 You selected *{session['item']}*.\nEnter quantity (e.g., 1 kg / 2 liters)"
+        return (
+            f"📦 You selected *{session['item']}*.\n"
+            "Enter quantity (e.g., 1 kg / 2 liters)"
+        )
 
-    # STEP 4: Quantity
+    # STEP 3: Quantity
     if session["step"] == "quantity":
         session["quantity"] = message
         session["step"] = "name"
         return "👤 Please enter your name"
 
-    # STEP 5: Name
+    # STEP 4: Name
     if session["step"] == "name":
         session["name"] = message.title()
         session["step"] = "mobile"
         return "📞 Please enter your mobile number"
 
-    # STEP 6: Mobile
+    # STEP 5: Mobile
     if session["step"] == "mobile":
         if not message.isdigit() or len(message) < 10:
             return "❌ Please enter a valid 10-digit mobile number"
@@ -144,12 +145,12 @@ def bot_reply(user_id: str, message: str) -> str:
         session["step"] = "address"
         return "🏠 Please enter your delivery address"
 
-    # STEP 7: Address + Save
+    # STEP 6: Address + Save
     if session["step"] == "address":
         session["address"] = message.title()
 
         save_order(session)
-        sessions.pop(user_id)
+        sessions.pop(user_id, None)
 
         return (
             "✅ *Order Confirmed!*\n\n"

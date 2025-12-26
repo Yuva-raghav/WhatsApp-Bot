@@ -1,4 +1,5 @@
 # main.py
+import json
 import gspread
 from google.oauth2.service_account import Credentials
 from typing import Dict
@@ -7,7 +8,6 @@ import os
 # ---------------- CONFIG ----------------
 SPREADSHEET_ID = "1WeAySjhKMjq97tefVxLIZd3NJRTmacFVhfaSBTyXA7Q"
 WORKSHEET_NAME = "Sheet1"
-SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_CREDENTIALS_PATH")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # --------------------------------------
 
@@ -32,9 +32,27 @@ sessions: Dict[str, Dict] = {}
 
 # ========== GOOGLE SHEETS ==========
 def get_sheet():
-    creds = Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    )
+    """
+    Local → uses service_account.json
+    Render → uses GOOGLE_CREDENTIALS_JSON
+    """
+
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+
+    # ✅ Render / Production
+    if creds_json:
+        creds = Credentials.from_service_account_info(
+            json.loads(creds_json),
+            scopes=SCOPES
+        )
+
+    # ✅ Local development
+    else:
+        creds = Credentials.from_service_account_file(
+            "service_account.json",
+            scopes=SCOPES
+        )
+
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID).worksheet(WORKSHEET_NAME)
 
